@@ -44,7 +44,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         await self.send(json.dumps({'error': str(e)}))
                         return
 
-                # Handle file message
                 if file_data:
                     try:
                         file_content = await self.save_file(file_data)
@@ -53,7 +52,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         await self.send(json.dumps({'error': str(e)}))
                         return
 
-                # Broadcast the message to participants
                 participants = await self.get_participants(chatroom)
                 for participant in participants:
                     participant_group_name = f"chat_{participant.username}"
@@ -71,6 +69,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     )
 
     async def chat_message(self, event):
+        event['message']['date_sent'] = event['message']['date_sent'].isoformat()
         await self.send(text_data=json.dumps(event))
 
     @database_sync_to_async
@@ -100,9 +99,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         ext = format.split('/')[-1]
         audio_file = ContentFile(base64.b64decode(imgstr), name=f'audio.{ext}')
 
-        # Convert and compress the audio file using pydub
         audio_segment = AudioSegment.from_file(audio_file)
-        # Export as mp3 with specific bitrate (128 kbps for example)
         output_file = f'audio/audio_{self.scope["user"].username}.mp3'
         audio_segment.export(output_file, format='mp3', bitrate='128k')
 

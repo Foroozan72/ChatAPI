@@ -63,5 +63,8 @@ class Message(models.Model):
     file_content = models.FileField(upload_to='files/', blank=True, null=True, validators=[validate_file_type, validate_file_size])
     date_sent = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ['date_sent']  
+
     def __str__(self):
         return f'Message from {self.sender} in chatroom {self.chatroom}'

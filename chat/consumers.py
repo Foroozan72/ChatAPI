@@ -6,17 +6,19 @@ from django.core.files.base import ContentFile
 from django.apps import apps
 from django.core.exceptions import ValidationError
 from pydub import AudioSegment
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
+import redis
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.username = self.scope['url_route']['kwargs']['username']
         self.user = self.scope['user']
-        self.chatroom_id = self.scope['url_route']['kwargs']['chatroom_id']
-        self.group_name = f"chat_{self.chatroom_id}"
+        self.chatroom_id = self.scope['url_route']['kwargs'].get('chatroom_id')
 
-        self.chatroom = await self.get_or_create_chatroom()
+        if not self.chatroom_id:
+            self.chatroom = await self.create_chatroom()
+        else:
+            self.chatroom = await self.get_or_create_chatroom()
+
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
@@ -31,6 +33,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             file_data = data.get('file_content')
 
             if self.chatroom:
+                message = None
                 if content:
                     message = await self.save_message(self.chatroom, content)
 
@@ -39,7 +42,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         audio_file = await self.process_audio_file(audio_data)
                         message = await self.save_message(self.chatroom, None, audio_content=audio_file)
                     except ValidationError as e:
-                        await self.send(json.dumps({'error': str(e)}))
+                        await self.send_error(str(e))
                         return
 
                 if file_data:
@@ -47,29 +50,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         file_content = await self.save_file(file_data)
                         message = await self.save_message(self.chatroom, None, file_content=file_content)
                     except ValidationError as e:
-                        await self.send(json.dumps({'error': str(e)}))
+                        await self.send_error(str(e))
                         return
 
-                await self.store_message_in_redis(message)
-
-                participants = await self.get_participants(self.chatroom)
-                for participant in participants:
-                    participant_group_name = f"chat_{participant.username}"
-
-                    await self.channel_layer.group_send(
-                        participant_group_name,
-                        {
-                            'type': 'chat_message',
-                            'message': message.text_content,
-                            'audio_url': message.audio_content.url if message.audio_content else None,
-                            'file_url': message.file_content.url if message.file_content else None,
-                            'sender': message.sender.username,
-                            'date_sent': message.date_sent.isoformat()
-                        }
-                    )
+                if message:
+                    await self.store_message_in_redis(message)
+                    await self.notify_participants(message)
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps(event))
+
+    async def send_error(self, error_message):
+        await self.send(json.dumps({'error': error_message}))
+
+    @database_sync_to_async
+    def create_chatroom(self):
+        ChatRoom = apps.get_model('chat', 'ChatRoom')
+        other_user = self.get_other_user()
+        return ChatRoom.objects.create(user1=self.user, user2=other_user)
 
     @database_sync_to_async
     def get_or_create_chatroom(self):
@@ -130,7 +128,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def store_message_in_redis(self, message):
-        import redis
         r = redis.Redis(host='127.0.0.1', port=6379, db=0)
         r.lpush(f'chatroom_{self.chatroom_id}', json.dumps({
             'sender': message.sender.username,
@@ -139,3 +136,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'file_url': message.file_content.url if message.file_content else None,
             'date_sent': message.date_sent.isoformat()
         }))
+
+    async def notify_participants(self, message):
+        participants = await self.get_participants(self.chatroom)
+        for participant in participants:
+            participant_group_name = f"chat_{participant.username}"
+            await self.channel_layer.group_send(
+                participant_group_name,
+                {
+                    'type': 'chat_message',
+                    'message': message.text_content,
+                    'audio_url': message.audio_content.url if message.audio_content else None,
+                    'file_url': message.file_content.url if message.file_content else None,
+                    'sender': message.sender.username,
+                    'date_sent': message.date_sent.isoformat()
+                }
+            )

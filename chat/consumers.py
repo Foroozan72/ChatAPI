@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 import json
 import base64
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -7,18 +8,58 @@ from django.apps import apps
 from django.core.exceptions import ValidationError
 from pydub import AudioSegment
 import redis
+import logging
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.username = self.scope['url_route']['kwargs']['username']
-        self.other_username = 'arezoo' if self.username == 'foroozan' else 'foroozan'
-        self.group_name = f"chat_{self.username}_{self.other_username}"
 
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
-        await self.accept()
+    async def connect(self):
+        try:
+            logging.info("WebSocket connection initiated.")
+            
+            # Retrieve username from URL
+            user_name = self.scope['url_route']['kwargs']['username']
+            logging.info(f"Username from URL: {user_name}")
+            
+            # Get User instance from the database
+            User = get_user_model()
+            self.username = await database_sync_to_async(User.objects.get)(username=user_name)
+            logging.info(f"User instance retrieved: {self.username}")
+            
+            # Determine other user
+            self.other_username = await database_sync_to_async(User.objects.get)(username='arezoo' if user_name == 'foroozan' else 'foroozan')
+            logging.info(f"Other user instance: {self.other_username}")
+            
+            # Create a group name
+            sorted_usernames = sorted([self.username.username, self.other_username.username])
+            self.group_name = f"chat_{sorted_usernames[0]}_{sorted_usernames[1]}"
+            logging.info(f"Group name created: {self.group_name}")
+            
+            # Add the WebSocket to the group
+            await self.channel_layer.group_add(self.group_name, self.channel_name)
+            logging.info(f"WebSocket added to group: {self.group_name}")
+            
+            # Accept the WebSocket connection (this is where the handshake completes)
+            await self.accept()
+            logging.info("WebSocket connection accepted successfully.")
+        
+        except Exception as e:
+            logging.error(f"Error during WebSocket connection: {e}")
+            await self.close()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        try:
+            # Remove the WebSocket from the group
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            logging.info(f"WebSocket disconnected from group: {self.group_name}")
+
+        except Exception as e:
+            logging.error(f"Error during WebSocket disconnection: {e}")
+
+        # Optionally, perform any other cleanup tasks here
+        # For example, notify other participants about the disconnection if needed.
+
+        logging.info(f"WebSocket connection closed with code: {close_code}")
 
     async def receive(self, text_data=None):
         if text_data:
@@ -29,7 +70,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             message = None
             if content:
+                print(content)
                 message = await self.save_message(content)
+                print(message)
 
             if audio_data:
                 try:

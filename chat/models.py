@@ -44,20 +44,20 @@ def validate_file_type(file):
     if mime_type not in allowed_mime_types:
         raise ValidationError(f'Unsupported file type: {mime_type}. Allowed types are: {", ".join(allowed_mime_types.values())}')
 
-class ChatRoom(models.Model):
-    user1 = models.ForeignKey(User, related_name='chatroom_user1', on_delete=models.CASCADE)
-    user2 = models.ForeignKey(User, related_name='chatroom_user2', on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
+# class ChatRoom(models.Model):
+#     user1 = models.ForeignKey(User, related_name='chatroom_user1', on_delete=models.CASCADE)
+#     user2 = models.ForeignKey(User, related_name='chatroom_user2', on_delete=models.CASCADE)
+#     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ('user1', 'user2')
+#     class Meta:
+#         unique_together = ('user1', 'user2')
 
-    def __str__(self):
-        return f'ChatRoom between {self.user1.username} and {self.user2.username}'
+#     def __str__(self):
+#         return f'ChatRoom between {self.user1.username} and {self.user2.username}'
 
 class Message(models.Model):
-    chatroom = models.ForeignKey(ChatRoom, related_name='messages', on_delete=models.CASCADE)
-    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    # chatroom = models.ForeignKey(ChatRoom, related_name='messages', on_delete=models.CASCADE)
+    sender = models.TextField(blank=True, null=True) #models.ForeignKey(User, on_delete=models.CASCADE)
     text_content = models.TextField(blank=True, null=True)
     audio_content = models.FileField(upload_to='audio/', blank=True, null=True, validators=[validate_audio_file, validate_file_size])
     file_content = models.FileField(upload_to='files/', blank=True, null=True, validators=[validate_file_type, validate_file_size])
@@ -67,4 +67,4 @@ class Message(models.Model):
         ordering = ['date_sent']  
 
     def __str__(self):
-        return f'Message from {self.sender} in chatroom {self.chatroom}'
+        return f'Message from {self.sender} '

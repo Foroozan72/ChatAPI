@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from pydub import AudioSegment
 import redis
 import logging
+from pydub.exceptions import PydubException
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -160,6 +161,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # print(text_data)
         if text_data:
             data = json.loads(text_data)
+            print(data)
             content = data.get('content')
             audio_data = data.get('audio_content')
             file_data = data.get('file_content')
@@ -241,17 +243,43 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
         return message
 
+
     @database_sync_to_async
     def process_audio_file(self, audio_data):
-        format, imgstr = audio_data.split(';base64,')
-        ext = format.split('/')[-1]
-        audio_file = ContentFile(base64.b64decode(imgstr), name=f'audio.{ext}')
-        
-        audio_segment = AudioSegment.from_file(audio_file)
-        output_file = f'audio/audio_{self.username}.mp3'
-        audio_segment.export(output_file, format='mp3', bitrate='128k')
+        try:
+            if ';base64,' not in audio_data:
+                raise ValueError("Invalid audio data format")
 
-        return output_file
+            # Split the audio_data to get the base64 encoded part
+            format, imgstr = audio_data.split(';base64,', 1)
+            ext = format.split('/')[-1]
+
+            # Add padding if needed
+            missing_padding = len(imgstr) % 4
+            if missing_padding:
+                imgstr += '=' * (4 - missing_padding)
+
+            # Decode the base64 data
+            audio_bytes = base64.b64decode(imgstr)
+
+            # Use ContentFile to handle the in-memory audio file
+            audio_file = ContentFile(audio_bytes, name=f'audio.{ext}')
+
+            # Load and process the audio file using pydub
+            audio_segment = AudioSegment.from_file(audio_file)
+
+            # Define output file path
+            output_file = f'audio/audio_{self.username}.mp3'
+
+            # Export the audio segment as an MP3 file
+            audio_segment.export(output_file, format='mp3', bitrate='128k')
+
+            return output_file
+
+        except (ValueError, PydubException) as e:
+            # Log or handle specific errors
+            self.send_error(str(e))
+            return None
 
     @database_sync_to_async
     def save_file(self, file_data):

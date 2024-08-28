@@ -12,43 +12,13 @@ import logging
 from pydub.exceptions import PydubException
 
 
+
+# {
+#     "audio_content":"data:audio/wav;base64,<base64_encoded_audio_data_here>"
+# }
+
 class ChatConsumer(AsyncWebsocketConsumer):
 
-    # async def connect(self):
-    #     try:
-    #         logging.info("WebSocket connection initiated.")
-            
-    #         # Retrieve userid from URL
-    #         user_id = self.scope['url_route']['kwargs']['userid']
-    #         logging.info(f"User ID from URL: {user_id}")
-            
-    #         # Get User instance from the database
-    #         User = get_user_model()
-    #         self.user = await database_sync_to_async(User.objects.get)(id=user_id)
-    #         logging.info(f"User instance retrieved: {self.user}")
-
-    #         # Determine other user
-    #         other_user_id = 1 if user_id == 2 else 2  # Example logic to determine other user
-    #         self.other_user = await database_sync_to_async(User.objects.get)(id=other_user_id)
-    #         logging.info(f"Other user instance: {self.other_user}")
-            
-    #         # Create a group name
-    #         sorted_usernames = sorted([self.user.username, self.other_user.username])
-    #         self.group_name = f"chat_{sorted_usernames[0]}_{sorted_usernames[1]}"
-    #         logging.info(f"Group name created: {self.group_name}")
-            
-    #         # Add the WebSocket to the group
-    #         await self.channel_layer.group_add(self.group_name, self.channel_name)
-    #         logging.info(f"WebSocket added to group: {self.group_name}")
-            
-    #         # Accept the WebSocket connection
-    #         await self.accept()
-    #         logging.info("WebSocket connection accepted successfully.")
-        
-    #     except Exception as e:
-    #         logging.error(f"Error during WebSocket connection: {e}")
-    #         await self.close()
-#################################################
     async def connect(self):
         try:
             logging.info("WebSocket connection initiated.")
@@ -57,18 +27,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             user_name = self.scope['url_route']['kwargs']['username']
             logging.info(f"Username from URL: {user_name}")
             
-            # Get User instance from the database
-            # User = get_user_model()
-            # self.username = await database_sync_to_async(User.objects.get)(username=user_name)
-            # print(self.username)
-            # logging.info(f"User instance retrieved: {self.username}")
-            
-            # Determine other user
-            # self.other_username = await database_sync_to_async(User.objects.get)(username='arezoo' if user_name == 'foroozan' else 'foroozan')
-            # logging.info(f"Other user instance: {self.other_username}")
-            
-            # Create a group name
-            # sorted_usernames = sorted([self.username.username, self.other_username.username])
             self.group_name = f"chat_group_name"
             logging.info(f"Group name created: {self.group_name}")
             
@@ -84,46 +42,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             logging.error(f"Error during WebSocket connection: {e}")
             await self.close()
 
-#######################################################################################################################################
-    # async def connect(self):
-    #     try:
-    #         logging.info("WebSocket connection initiated.")
-            
-    #         # Retrieve user ID from URL
-    #         User = get_user_model()
-    #         print("user1")
-    #         # print(self.scope['url_route'])
-    #         user_id = self.scope['url_route']['kwargs']['username']
-    #         print(user_id)
-    #         logging.info(f"UserId from URL: {user_id}")
-            
-        
-    #         # Determine other user
-    #         print("user2")
-    #         other_user_id = 1 if user_id == 2 else 2  # Example logic to determine other user
-    #         self.other_user = await database_sync_to_async(User.objects.get)(id=other_user_id)
-    #         print(self.other_user.id)
-    #         logging.info(f"Other user instance: {self.other_user}")
-            
-    #         # Create a group name
-            
-    #         self.group_name = "chat_group_name"
-    #         logging.info(f"Group name created: {self.group_name}")
-            
-    #         # Add the WebSocket to the group
-    #         await self.channel_layer.group_add(self.group_name, self.channel_name)
-    #         logging.info(f"WebSocket added to group: {self.group_name}")
-            
-
-
-    #         await self.accept()
-    #         logging.info("WebSocket connection accepted successfully.")
-        
-    #     except Exception as e:
-    #         logging.error(f"Error during WebSocket connection: {e}")
-    #         await self.close()
-
-
     async def disconnect(self, close_code):
         try:
             # Ensure self.group_name is defined before trying to discard the group
@@ -137,27 +55,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logging.error(f"Error during WebSocket disconnection: {e}")
 
-        # Optionally, perform any other cleanup tasks here
-        # For example, notify other participants about the disconnection if needed.
-
         logging.info(f"WebSocket connection closed with code: {close_code}")
 
-###############################################################
-    # async def disconnect(self, close_code):
-    #     try:
-    #         # Remove the WebSocket from the group
-    #         await self.channel_layer.group_discard(self.group_name, self.channel_name)
-    #         logging.info(f"WebSocket disconnected from group: {self.group_name}")
-
-    #     except Exception as e:
-    #         logging.error(f"Error during WebSocket disconnection: {e}")
-
-    #     # Optionally, perform any other cleanup tasks here
-    #     # For example, notify other participants about the disconnection if needed.
-
-    #     logging.info(f"WebSocket connection closed with code: {close_code}")
-
     async def receive(self, text_data=None):
+
         # print(text_data)
         if text_data:
             data = json.loads(text_data)
@@ -198,45 +99,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def send_error(self, error_message):
         await self.send(json.dumps({'error': error_message}))
 
-    # @database_sync_to_async
-    # def get_or_create_chatroom(self, user_id, other_user_id):
-    #     ChatRoom = apps.get_model('chat', 'ChatRoom')
-
-    #     chatroom, created = ChatRoom.objects.get_or_create(
-    #         user1=user_id, 
-    #         user2_id=other_user_id
-    #     )
-    #     return chatroom
-
-    # @database_sync_to_async
-    # def get_or_create_chatroom(self, user_id, other_user_id):
-    #     User = apps.get_model('auth', 'User')
-    #     ChatRoom = apps.get_model('chat', 'ChatRoom')
-
-    #     # Fetch User instances
-    #     try:
-    #         user1 = User.objects.get(id=user_id)
-    #         user2 = User.objects.get(id=other_user_id)
-    #     except User.DoesNotExist:
-    #         raise ValueError("One or both users do not exist")
-
-    #     # Ensure that user1 is always the smaller ID (to handle uniqueness properly)
-    #     if user1.id > user2.id:
-    #         user1, user2 = user2, user1
-
-    #     # Create or get ChatRoom instance
-    #     chatroom, created = ChatRoom.objects.get_or_create(
-    #         user1=user1,
-    #         user2=user2
-    #     )
-    #     return chatroom
-
     @database_sync_to_async   
     def save_message(self, content=None, audio_content=None, file_content=None):
+        User = get_user_model()
+        user = User.objects.first()
+
         Message = apps.get_model('chat', 'Message')
         message = Message.objects.create(
             
-            sender= "user1", #self.username,
+            sender= user, #self.username,
             text_content=content,
             audio_content=audio_content,
             file_content=file_content
@@ -293,7 +164,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def store_message_in_redis(self, message):
         r = redis.Redis(host='127.0.0.1', port=6379, db=0)
         r.lpush(f'chat_{self.group_name}', json.dumps({
-            'sender': message.sender,
+            'sender': message.sender.id,
             'text_content': message.text_content,
             'audio_url': message.audio_content.url if message.audio_content else None,
             'file_url': message.file_content.url if message.file_content else None,
@@ -306,7 +177,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
             {
                 'type': 'chat_message',
                 'message': message.text_content,
-                'sender': message.sender,
+                'sender': message.sender.id,
                 'date_sent': str(message.date_sent)
             }
         )
+
+
+        # from django.contrib.auth import get_user_model
+        # User = get_user_model()
+        # print(User)
+
+        # current_user = self.scope["user"]
+        # print(current_user.username)
+        # print(current_user)

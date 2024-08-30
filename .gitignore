@@ -1,0 +1,46 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+*.eggs/
+*.dll
+*.deb
+*.dmg
+*.pkg
+*.mpkg
+*.swp
+*.sqlite3
+*.log
+*.pot
+
+# Django stuff:
+*.sqlite3
+/db.sqlite3
+/db.sqlite3-journal
+/media
+/staticfiles
+/static
+/env
+.venv/
+*.env
+
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/
+
+# Celery
+celerybeat-schedule
+
+# Coverage reports
+htmlcov/
+.coverage
+*.cover
+*.py,cover
+.hypothesis/

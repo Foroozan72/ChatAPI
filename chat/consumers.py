@@ -9,7 +9,13 @@ from django.core.exceptions import ValidationError
 from pydub import AudioSegment
 import redis
 import logging
+from pydub.exceptions import PydubException
 
+
+
+# {
+#     "audio_content":"data:audio/wav;base64,<base64_encoded_audio_data_here>"
+# }
 
 class ChatConsumer(AsyncWebsocketConsumer):
 
@@ -21,18 +27,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             user_name = self.scope['url_route']['kwargs']['username']
             logging.info(f"Username from URL: {user_name}")
             
-            # Get User instance from the database
-            User = get_user_model()
-            self.username = await database_sync_to_async(User.objects.get)(username=user_name)
-            logging.info(f"User instance retrieved: {self.username}")
-            
-            # Determine other user
-            self.other_username = await database_sync_to_async(User.objects.get)(username='arezoo' if user_name == 'foroozan' else 'foroozan')
-            logging.info(f"Other user instance: {self.other_username}")
-            
-            # Create a group name
-            sorted_usernames = sorted([self.username.username, self.other_username.username])
-            self.group_name = f"chat_{sorted_usernames[0]}_{sorted_usernames[1]}"
+            self.group_name = f"chat_group_name"
             logging.info(f"Group name created: {self.group_name}")
             
             # Add the WebSocket to the group
@@ -49,21 +44,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         try:
-            # Remove the WebSocket from the group
-            await self.channel_layer.group_discard(self.group_name, self.channel_name)
-            logging.info(f"WebSocket disconnected from group: {self.group_name}")
+            # Ensure self.group_name is defined before trying to discard the group
+            if hasattr(self, 'group_name'):
+                # Remove the WebSocket from the group
+                await self.channel_layer.group_discard(self.group_name, self.channel_name)
+                logging.info(f"WebSocket disconnected from group: {self.group_name}")
+            else:
+                logging.warning("group_name was not set; skipping group discard.")
 
         except Exception as e:
             logging.error(f"Error during WebSocket disconnection: {e}")
 
-        # Optionally, perform any other cleanup tasks here
-        # For example, notify other participants about the disconnection if needed.
-
         logging.info(f"WebSocket connection closed with code: {close_code}")
 
     async def receive(self, text_data=None):
+
+        # print(text_data)
         if text_data:
             data = json.loads(text_data)
+            print(data)
             content = data.get('content')
             audio_data = data.get('audio_content')
             file_data = data.get('file_content')
@@ -100,28 +99,58 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def send_error(self, error_message):
         await self.send(json.dumps({'error': error_message}))
 
-    @database_sync_to_async
+    @database_sync_to_async   
     def save_message(self, content=None, audio_content=None, file_content=None):
+        User = get_user_model()
+        user = User.objects.first()
+
         Message = apps.get_model('chat', 'Message')
         message = Message.objects.create(
-            sender=self.username,
+            
+            sender= user, #self.username,
             text_content=content,
             audio_content=audio_content,
             file_content=file_content
         )
         return message
 
+
     @database_sync_to_async
     def process_audio_file(self, audio_data):
-        format, imgstr = audio_data.split(';base64,')
-        ext = format.split('/')[-1]
-        audio_file = ContentFile(base64.b64decode(imgstr), name=f'audio.{ext}')
-        
-        audio_segment = AudioSegment.from_file(audio_file)
-        output_file = f'audio/audio_{self.username}.mp3'
-        audio_segment.export(output_file, format='mp3', bitrate='128k')
+        try:
+            if ';base64,' not in audio_data:
+                raise ValueError("Invalid audio data format")
 
-        return output_file
+            # Split the audio_data to get the base64 encoded part
+            format, imgstr = audio_data.split(';base64,', 1)
+            ext = format.split('/')[-1]
+
+            # Add padding if needed
+            missing_padding = len(imgstr) % 4
+            if missing_padding:
+                imgstr += '=' * (4 - missing_padding)
+
+            # Decode the base64 data
+            audio_bytes = base64.b64decode(imgstr)
+
+            # Use ContentFile to handle the in-memory audio file
+            audio_file = ContentFile(audio_bytes, name=f'audio.{ext}')
+
+            # Load and process the audio file using pydub
+            audio_segment = AudioSegment.from_file(audio_file)
+
+            # Define output file path
+            output_file = f'audio/audio_{self.username}.mp3'
+
+            # Export the audio segment as an MP3 file
+            audio_segment.export(output_file, format='mp3', bitrate='128k')
+
+            return output_file
+
+        except (ValueError, PydubException) as e:
+            # Log or handle specific errors
+            self.send_error(str(e))
+            return None
 
     @database_sync_to_async
     def save_file(self, file_data):
@@ -135,7 +164,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def store_message_in_redis(self, message):
         r = redis.Redis(host='127.0.0.1', port=6379, db=0)
         r.lpush(f'chat_{self.group_name}', json.dumps({
-            'sender': message.sender,
+            'sender': message.sender.id,
             'text_content': message.text_content,
             'audio_url': message.audio_content.url if message.audio_content else None,
             'file_url': message.file_content.url if message.file_content else None,
@@ -148,7 +177,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
             {
                 'type': 'chat_message',
                 'message': message.text_content,
-                'sender': message.sender,
+                'sender': message.sender.id,
                 'date_sent': str(message.date_sent)
             }
         )
+
+
+        # from django.contrib.auth import get_user_model
+        # User = get_user_model()
+        # print(User)
+
+        # current_user = self.scope["user"]
+        # print(current_user.username)
+        # print(current_user)
